@@ -263,8 +263,12 @@ void drawPLanetAxes(const Planet& p){
     glLineWidth(1.0f);
 }
 
-void drawRing(const Planet& p, float innerR, float outerR, float r, float g, float b) {
+void drawRing(const Planet& p, const Planet& sun, float innerR, float outerR, float r, float g, float b) {
     int segments = 60;
+
+    glm::vec3 toSun(sun.x - p.x, sun.y - p.y, sun.z - p.z);
+    glm::vec3 sunDir = glm::length(toSun) > 0 ? glm::normalize(toSun) : glm::vec3(1,0,0);
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glBegin(GL_QUAD_STRIP);
@@ -274,12 +278,17 @@ void drawRing(const Planet& p, float innerR, float outerR, float r, float g, flo
         float cosA = cos(angle);
         float sinA = sin(angle);
 
+        // lighting from the sun
+        glm::vec3 dir(cosA, 0.0f, sinA);
+        float facing = glm::dot(dir, sunDir);
+        float light = 0.15f + 0.85f * fmax(facing, 0.0f);
+
         // innner ring vertex
-        glColor4f(r, g, b, 0.2f);
+        glColor4f(r * light, g * light, b * light, 0.2f);
         glVertex3f(p.x + innerR * cosA, p.y, p.z + innerR * sinA);
         
         // outer ring vertex
-        glColor4f(r, g, b, 0.6f);
+        glColor4f(r * light, g * light, b * light, 0.6f);
         glVertex3f(p.x + outerR * cosA, p.y, p.z + outerR * sinA);
     }
     glEnd();
@@ -290,16 +299,17 @@ int main() {
     Engine engine;
 
     std::vector<Planet> planets = {
-        //  Name        x     y     z     vx     vy    r        m           realMass            realSpeed         realDist          cr    cg    cb
-        { "Sun",       0,     0,    0,   0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
-        { "Mercury", 100,     0,    0,   0.0,   4.1,   6,      0.1f,  "Mass: 0.055 Earth",  "Vel: 47.9 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
-        { "Venus",   150,     0,    0,   0.0,   3.3,  10,      0.8f,  "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
-        { "Earth",   210,     0,    0,   0.0,   2.8,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
-        { "Mars",    290,     0,    0,   0.0,   2.4,   9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
-        { "Jupiter", 420,     0,    0,   0.0,   2.0,  22,     30.0f,  "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
-        { "Saturn",  540,     0,    0,   0.0,   1.8,  17,      9.0f,  "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
-        { "Uranus",  650,     0,    0,   0.0,   1.6,  14,      1.4f,  "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
-        { "Neptune", 740,     0,    0,   0.0,   1.5,  14,      1.5f,  "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+        //  Name        x     y   z    vx     vy    r     m         realMass                     realSpeed      realDist          cr    cg    cb
+        { "Sun",       0,     0,  0,  0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
+        { "Mercury", 100,     0,  0,  0.0,   4.1,   6,      0.1f,  "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
+        { "Venus",   150,     0,  0,  0.0,   3.3,  10,      0.8f,  "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
+        { "Earth",   210,     0,  0,  0.0,   2.8,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
+        { "Moon",    218,     0,  0,  0.0,   3.1,   3,      0.01f, "Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 }, // <--- Added Moon here
+        { "Mars",    290,     0,  0,  0.0,   2.4,   9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
+        { "Jupiter", 420,     0,  0,  0.0,   2.0,  22,     30.0f,  "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
+        { "Saturn",  540,     0,  0,  0.0,   1.8,  17,      9.0f,  "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
+        { "Uranus",  650,     0,  0,  0.0,   1.6,  14,      1.4f,  "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
+        { "Neptune", 740,     0,  0,  0.0,   1.5,  14,      1.5f,  "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
     };
 
     bool showProperties = false;
@@ -421,7 +431,7 @@ int main() {
 
             // render Jupiter's ring
             if (p.name == "Jupiter") {
-                drawRing(p, p.r * 1.3f, p.r * 2.1f, 0.8f, 0.7f, 0.6f);
+                drawRing(p, planets[0], p.r * 1.3f, p.r * 2.1f, 0.8f, 0.7f, 0.6f);
             }
 
             if (showProperties) {
