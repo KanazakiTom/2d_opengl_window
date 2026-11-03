@@ -224,20 +224,82 @@ void drawGrid(){
     glEnd();
 }
 
+// 3D XYZ Coordinate Axes (Red = X, Green = Y, Blue = Z)
+void drawAxes() {
+    glLineWidth(2.5f);
+    glBegin(GL_LINES);
+    // X Axis - Red
+    glColor3f(1.0f, 0.2f, 0.2f);
+    glVertex3f(-300.0f, 0.0f, 0.0f);
+    glVertex3f(300.0f, 0.0f, 0.0f);
+
+    // Y Axis - Green
+    glColor3f(0.2f, 1.0f, 0.2f);
+    glVertex3f(0.0f, -300.0f, 0.0f);
+    glVertex3f(0.0f, 300.0f, 0.0f);
+
+    // Z Axis - Blue
+    glColor3f(0.2f, 0.5f, 1.0f);
+    glVertex3f(0.0f, 0.0f, -300.0f);
+    glVertex3f(0.0f, 0.0f, 300.0f);
+    glEnd();
+    glLineWidth(1.0f);
+}
+
+void drawPLanetAxes(const Planet& p){
+    float len = p.r * 1.8f;
+    glLineWidth(2.0f);
+    glBegin(GL_LINES);
+
+    glColor3f(1.0f, 0.2f, 0.2f);
+    glVertex3f(p.x - len, p.y, p.z); glVertex3f(p.x + len, p.y, p.z);
+    // Y Axis - Green
+    glColor3f(0.2f, 1.0f, 0.2f);
+    glVertex3f(p.x, p.y - len, p.z); glVertex3f(p.x, p.y + len, p.z);
+    // Z Axis - Blue
+    glColor3f(0.2f, 0.5f, 1.0f);
+    glVertex3f(p.x, p.y, p.z - len); glVertex3f(p.x, p.y, p.z + len);
+    glEnd();
+    glLineWidth(1.0f);
+}
+
+void drawRing(const Planet& p, float innerR, float outerR, float r, float g, float b) {
+    int segments = 60;
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_QUAD_STRIP);
+
+    for (int i = 0; i <= segments; i++) {
+        float angle = 2.0f * PI * i /segments;
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+
+        // innner ring vertex
+        glColor4f(r, g, b, 0.2f);
+        glVertex3f(p.x + innerR * cosA, p.y, p.z + innerR * sinA);
+        
+        // outer ring vertex
+        glColor4f(r, g, b, 0.6f);
+        glVertex3f(p.x + outerR * cosA, p.y, p.z + outerR * sinA);
+    }
+    glEnd();
+    glDisable(GL_BLEND);
+}
+
 int main() {
     Engine engine;
 
     std::vector<Planet> planets = {
-        //  Name        x     y     vx     vy    r     m         realMass                     realSpeed      realDist          cr    cg    cb
-        { "Sun",       0,     0,0,  0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
-        { "Mercury", 100,     0,0,   0.0,   4.1,   6,      0.1f,  "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
-        { "Venus",   150,     0,0,   0.0,   3.3,  10,      0.8f,  "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
-        { "Earth",   210,     0,0,   0.0,   2.8,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
-        { "Mars",    290,     0,0,   0.0,   2.4,   9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
-        { "Jupiter", 420,     0,0,   0.0,   2.0,  22,     30.0f,  "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
-        { "Saturn",  540,     0,0,   0.0,   1.8,  17,      9.0f,  "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
-        { "Uranus",  650,     0,0,   0.0,   1.6,  14,      1.4f,  "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
-        { "Neptune", 740,     0,0,   0.0,   1.5,  14,      1.5f,  "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+        //  Name        x     y     z     vx     vy    r        m           realMass            realSpeed         realDist          cr    cg    cb
+        { "Sun",       0,     0,    0,   0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
+        { "Mercury", 100,     0,    0,   0.0,   4.1,   6,      0.1f,  "Mass: 0.055 Earth",  "Vel: 47.9 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
+        { "Venus",   150,     0,    0,   0.0,   3.3,  10,      0.8f,  "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
+        { "Earth",   210,     0,    0,   0.0,   2.8,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
+        { "Mars",    290,     0,    0,   0.0,   2.4,   9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
+        { "Jupiter", 420,     0,    0,   0.0,   2.0,  22,     30.0f,  "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
+        { "Saturn",  540,     0,    0,   0.0,   1.8,  17,      9.0f,  "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
+        { "Uranus",  650,     0,    0,   0.0,   1.6,  14,      1.4f,  "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
+        { "Neptune", 740,     0,    0,   0.0,   1.5,  14,      1.5f,  "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
     };
 
     bool showProperties = false;
@@ -267,25 +329,56 @@ int main() {
         if (mouseClicked && !mouseWasPressed){
             double mx, my;
             glfwGetCursorPos(engine.window, &mx, &my);
+            float bottomMouseY = engine.HEIGHT - my;
 
             int clickedIndex = -1;
-            float minDist = 9999.0f;
 
-            for (size_t i = 0; i < planets.size(); i++) {
-                glm::vec3 worldPos(planets[i].x, planets[i].y, planets[i].z);
-                glm::vec3 screenPos = glm::project(worldPos, engine.view, engine.projection, glm::vec4(0, 0, engine.WIDTH, engine.HEIGHT));
+            //float minDist = 9999.0f;
+            
+            // 1. TAB MODE 
+            if (showProperties) {
+                const auto& sun = planets[0];
+                for (size_t i = 0; i < planets.size(); i++) {
+                    glm::vec3 worldPos(planets[i].x, planets[i].y, planets[i].z);
+                    glm::vec3 screenPos = glm::project(worldPos, engine.view, engine.projection, glm::vec4(0, 0, engine.WIDTH, engine.HEIGHT));
 
-                float screenX = screenPos.x;
-                float screenY = engine.HEIGHT - screenPos.y;
+                    float screenX = screenPos.x;
+                    float screenY = screenPos.y;
 
-                float dx = (float)mx - screenX;
-                float dy = (float)my -screenY;
-                float dist2D = sqrt(dx*dx + dy*dy);
-                float clickRadius = fmax(planets[i].r * (1000.0f / engine.dist), 18.0f);
+                    float cardW = 240.0f;
+                    float cardH = 95.0f;
+                    float cardX = screenX + 20.0f;
+                    float cardY = screenY - 20.0f;
 
-                if(dist2D < clickRadius && dist2D < minDist) {
-                    minDist = dist2D;
-                    clickedIndex = (int)i;
+                    if (cardX + cardW > engine.WIDTH) cardX= screenX - cardW - 20.0f;
+                    if (cardY - cardH < 0) cardY = screenY + cardH + 20.0f;
+                    
+                    if (mx >= cardX && mx <=cardX + cardW && bottomMouseY >= cardY - cardH && bottomMouseY <= cardY) {
+                        clickedIndex = (int)i;
+                        break;;
+                    }
+                }
+            }
+
+            //2. no card clicked, check 3D planet 
+            if (clickedIndex == -1) {
+                float minDist = 9999.0f;
+                for (size_t i = 0; i < planets.size(); i++) {
+                    glm::vec3 worldPos(planets[i].x, planets[i].y, planets[i].z);
+                    glm::vec3 screenPos = glm::project(worldPos, engine.view, engine.projection, glm::vec4(0, 0, engine.WIDTH, engine.HEIGHT));
+
+                    float screenX = screenPos.x;
+                    float screenY = engine.HEIGHT - screenPos.y;
+
+                    float dx = (float)mx - screenX;
+                    float dy = (float)my - screenY;
+                    float dist2D = sqrt(dx * dx + dy * dy);
+                    float clickRadius = fmax(planets[i].r * (1000.0f / engine.dist), 18.0f);
+
+                    if (dist2D < clickRadius && dist2D < minDist) {
+                        minDist = dist2D;
+                        clickedIndex = (int)i;
+                    }
                 }
             }
             followedPlanet = clickedIndex;
@@ -319,13 +412,21 @@ int main() {
             p.vy += ay;
         }
 
-        // 2. Move and draw planets
+        // 2. Move and draw planets, rings (if had)
         for (auto& p : planets) {
             p.x += p.vx;
             p.y += p.vy;
 
-            glColor3f(p.cr, p.cg, p.cb);
             drawSphere(p, planets[0]);
+
+            // render Jupiter's ring
+            if (p.name == "Jupiter") {
+                drawRing(p, p.r * 1.3f, p.r * 2.1f, 0.8f, 0.7f, 0.6f);
+            }
+
+            if (showProperties) {
+                drawPLanetAxes(p);
+            }
         }
 
         // 3. Render HUD cards with fully visible text when TAB is active
