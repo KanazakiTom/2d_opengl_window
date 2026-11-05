@@ -26,6 +26,12 @@ struct Planet {
     string realDist;
     float cr, cg, cb; // Color components
     vector<glm::vec3> trail; 
+
+    // orbit
+    float accumulatedAngle = 0.0f; //total radians swept
+    float prevAngle = 0.0f;
+    bool angleInitialized = false;
+    int completedOrbits = 0;
 };
 
 struct Engine {
@@ -225,7 +231,6 @@ void drawGrid(){
     glEnd();
 }
 
-// 3D XYZ Coordinate Axes (Red = X, Green = Y, Blue = Z)
 void drawAxes() {
     glLineWidth(2.5f);
     glBegin(GL_LINES);
@@ -296,7 +301,7 @@ void drawRing(const Planet& p, const Planet& sun, float innerR, float outerR, fl
     glDisable(GL_BLEND);
 }
 
-// Render a translucent 3D wireframe sphere container
+#pragma region Additional Properities
 void drawBoundingBubble(float radius) {
     int stacks = 64, slices = 64;
     glColor4f(0.3f, 0.5f, 0.8f, 0.15f); // Subtle cyan grid outline
@@ -315,6 +320,29 @@ void drawBoundingBubble(float radius) {
         }
         glEnd();
     }
+    glDisable(GL_BLEND);
+}
+
+void drawSpaceBox(float halfSize, int gridDivisions) {
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glColor4f(0.25f, 0.45f, 0.75f, 0.18f); // translucent cyan
+    glLineWidth(1.0f);
+
+    float step = (2.0f * halfSize) / gridDivisions;
+
+    glBegin(GL_LINES);
+    for (int i = 0; i<= gridDivisions; i++) {
+        float u = -halfSize + i * step;
+        for (int j = 0; j <= gridDivisions; j++) {
+            float v = -halfSize + j * step;
+
+            glVertex3d(-halfSize, u, v); glVertex3f(halfSize, u, v);
+            glVertex3d(u, -halfSize, v); glVertex3f(u, halfSize, v);
+            glVertex3d(u, v, -halfSize); glVertex3f(u, v, halfSize);
+        }
+    }
+    glEnd();
     glDisable(GL_BLEND);
 }
 
@@ -337,21 +365,37 @@ void drawPlanetTrails(const vector<Planet>& planets) {
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
 }
+#pragma endregion
+
 int main() {
     Engine engine;
 
+    // std::vector<Planet> planets = {
+    //     //  Name        x     y     z     vx     vy     vz    r     m         realMass                     realSpeed      realDist          cr    cg    cb
+    //     { "Sun",       0,     0,    0,   0.0,   0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
+    //     { "Mercury", 100,     0,   40,   0.0,   3.5,  -1.8,   6,      0.1f,  "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
+    //     { "Venus",   150,     0,  -70,   0.0,   2.7,   1.6,  10,      0.8f,  "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
+    //     { "Earth",   210,     0,   90,   0.0,   2.2,  -1.4,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
+    //     { "Moon",    218,     0,   93,   0.0,   2.5,  -1.3,   3,      0.01f, "Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
+    //     { "Mars",    290,     0, -140,   0.0,   1.8,   1.3,   9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
+    //     { "Jupiter", 420,     0,  180,   0.0,   1.5,  -0.9,  22,     30.0f,  "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
+    //     { "Saturn",  540,     0, -220,   0.0,   1.3,   0.7,  17,      9.0f,  "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
+    //     { "Uranus",  650,     0,  260,   0.0,   1.1,  -0.6,  14,      1.4f,  "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
+    //     { "Neptune", 740,     0, -300,   0.0,   1.0,   0.5,  14,      1.5f,  "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+    // };
+    
     std::vector<Planet> planets = {
         //  Name        x     y     z     vx     vy     vz    r     m         realMass                     realSpeed      realDist          cr    cg    cb
         { "Sun",       0,     0,    0,   0.0,   0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
-        { "Mercury", 100,     0,   40,   0.0,   3.5,  -1.8,   6,      0.1f,  "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
-        { "Venus",   150,     0,  -70,   0.0,   2.7,   1.6,  10,      0.8f,  "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
-        { "Earth",   210,     0,   90,   0.0,   2.2,  -1.4,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
-        { "Moon",    218,     0,   93,   0.0,   2.5,  -1.3,   3,      0.01f, "Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
-        { "Mars",    290,     0, -140,   0.0,   1.8,   1.3,   9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
-        { "Jupiter", 420,     0,  180,   0.0,   1.5,  -0.9,  22,     30.0f,  "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
-        { "Saturn",  540,     0, -220,   0.0,   1.3,   0.7,  17,      9.0f,  "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
-        { "Uranus",  650,     0,  260,   0.0,   1.1,  -0.6,  14,      1.4f,  "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
-        { "Neptune", 740,     0, -300,   0.0,   1.0,   0.5,  14,      1.5f,  "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+        { "Mercury", 100,     0,   12,   0.0,   4.08, -0.3,   6,      0.14f, "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
+        { "Venus",   150,     0,   10,   0.0,   3.33,  0.2,  10,      0.81f, "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
+        { "Earth",   210,     0,    0,   0.0,   2.82,  0.0,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
+        { "Moon",    216.5,   0,    0,   0.0,   3.15,  0.1,   3,      0.012f,"Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
+        { "Mars",    290,     0,  -15,   0.0,   2.40,  0.15,  9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
+        { "Jupiter", 420,     0,   20,   0.0,   1.99, -0.1,  22,    317.8f, "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
+        { "Saturn",  540,     0,  -25,   0.0,   1.76,  0.12, 17,     95.2f, "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
+        { "Uranus",  650,     0,   15,   0.0,   1.60, -0.08, 14,     14.5f, "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
+        { "Neptune", 740,     0,  -20,   0.0,   1.50,  0.1,  14,     17.1f, "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
     };
 
     bool showProperties = false;
@@ -363,6 +407,7 @@ int main() {
     bool optAxes = true;
     bool optTrails = true;
     bool optBubble = true;
+    bool optSpaceBox = true;
 
     while (!glfwWindowShouldClose(engine.window)) {
         // Sun control
@@ -397,6 +442,7 @@ int main() {
                 else if (bottomMouseY >= menuY - 72.0f && bottomMouseY <= menuY - 52.0f) optAxes = !optAxes;
                 else if (bottomMouseY >= menuY - 94.0f && bottomMouseY <= menuY - 74.0f) optTrails = !optTrails;
                 else if (bottomMouseY >= menuY - 116.0f && bottomMouseY <= menuY - 96.0f) optBubble = !optBubble;
+                else if (bottomMouseY >= menuY - 138.0f && bottomMouseY <= menuY - 118.0f) optSpaceBox = !optSpaceBox;
             } else {
                 // 1. TAB MODE Card Selection
                 if (showProperties) {
@@ -484,11 +530,14 @@ int main() {
             p.y += p.vy;
             p.z += p.vz;
 
-            p.trail.push_back(glm::vec3(p.x,p.y,p.z));
-            if(p.trail.size() > 150) {
-                p.trail.erase(p.trail.begin());
-            }
+            if (showProperties && optTrails) {
+                p.trail.push_back(glm::vec3(p.x,p.y,p.z));
+                if(p.trail.size() > 150) {
+                    p.trail.erase(p.trail.begin());
+                }
 
+            }
+            
             drawSphere(p, planets[0]);
 
             // render Jupiter's ring
@@ -496,14 +545,15 @@ int main() {
                 drawRing(p, planets[0], p.r * 1.3f, p.r * 2.1f, 0.8f, 0.7f, 0.6f);
             }
 
-            if (showProperties) {
+            if (showProperties && optAxes) {
                 drawPlanetAxes(p);
             }
         }
 
         if (showProperties) {
-            drawBoundingBubble(800.0f);
-            drawPlanetTrails(planets);
+            if (optSpaceBox) drawSpaceBox(800.0f, 8);
+            if (optBubble) drawBoundingBubble(800.0f);
+            if (optTrails) drawPlanetTrails(planets);
         }
 
         // 3. Render HUD cards with fully visible text when TAB is active
@@ -521,62 +571,100 @@ int main() {
             glPushMatrix();
             glLoadIdentity();
 
-            const auto& sun = planets[0];
+            // --- Render Top-Left Settings Checkbox Menu ---
+            float menuX = 20.0f;
+            float menuY = engine.HEIGHT - 20.0f;
+            float menuW = 230.0f;
+            float menuH = 150.0f;
 
-            for (const auto& p : planets) {
-                // Project 3D world coordinates directly to 2D window screen coordinates
-                glm::vec3 worldPos(p.x, p.y, p.z);
-                glm::vec3 screenPos = glm::project(worldPos, engine.view, engine.projection, glm::vec4(0, 0, engine.WIDTH, engine.HEIGHT));
-                
-                float sx = screenPos.x;
-                float sy = screenPos.y;
+            glColor4f(0.06f, 0.08f, 0.12f, 0.90f);
+            glBegin(GL_QUADS);
+            glVertex2f(menuX, menuY); glVertex2f(menuX + menuW, menuY);
+            glVertex2f(menuX + menuW, menuY - menuH); glVertex2f(menuX, menuY - menuH);
+            glEnd();
 
-                float relVx = p.vx - sun.vx;
-                float relVy = p.vy - sun.vy;
-                float codeSpeed = sqrt(relVx * relVx + relVy * relVy);
-                float codeDist = sqrt((p.x - sun.x) * (p.x - sun.x) + (p.y - sun.y) * (p.y - sun.y) + (p.z - sun.z) * (p.z - sun.z));
+            glColor3f(0.4f, 0.6f, 0.9f);
+            glLineWidth(1.5f);
+            glBegin(GL_LINE_LOOP);
+            glVertex2f(menuX, menuY); glVertex2f(menuX + menuW, menuY);
+            glVertex2f(menuX + menuW, menuY - menuH); glVertex2f(menuX, menuY - menuH);
+            glEnd();
 
-                float cardW = 240.0f;
-                float cardH = 95.0f;
-                float cardX = sx + 20.0f;
-                float cardY = sy - 20.0f;
+            drawText("DISPLAY SETTINGS:", menuX + 12.0f, menuY - 20.0f, 0.6f, 1.0f, 1.0f, 1.0f);
 
-                if (cardX + cardW > engine.WIDTH) cardX = sx - cardW - 20.0f;
-                if (cardY - cardH < 0) cardY = sy + cardH + 20.0f;
-
-                // Background card box
-                glColor4f(0.06f, 0.08f, 0.12f, 0.90f);
-                glBegin(GL_QUADS);
-                glVertex2f(cardX, cardY);
-                glVertex2f(cardX + cardW, cardY);
-                glVertex2f(cardX + cardW, cardY - cardH);
-                glVertex2f(cardX, cardY - cardH);
-                glEnd();
-
-                // Card border
-                glColor3f(p.cr, p.cg, p.cb);
-                glLineWidth(1.5f);
+            auto drawCheckbox = [&](string label, bool checked, float yOffset) {
+                float boxX = menuX + 15.0f;
+                float boxY = menuY - yOffset;
+                glColor3f(0.3f, 0.4f, 0.5f);
                 glBegin(GL_LINE_LOOP);
-                glVertex2f(cardX, cardY);
-                glVertex2f(cardX + cardW, cardY);
-                glVertex2f(cardX + cardW, cardY - cardH);
-                glVertex2f(cardX, cardY - cardH);
+                glVertex2f(boxX, boxY); glVertex2f(boxX + 12, boxY);
+                glVertex2f(boxX + 12, boxY - 12); glVertex2f(boxX, boxY - 12);
                 glEnd();
+                if (checked) {
+                    glColor3f(0.3f, 1.0f, 0.6f);
+                    glBegin(GL_QUADS);
+                    glVertex2f(boxX + 3, boxY - 3); glVertex2f(boxX + 9, boxY - 3);
+                    glVertex2f(boxX + 9, boxY - 9); glVertex2f(boxX + 3, boxY - 9);
+                    glEnd();
+                }
+                drawText(label, boxX + 22.0f, boxY - 10.0f, 0.55f, 0.9f, 0.9f, 0.9f);
+            };
 
-                // Format strings including XYZ coordinates
-                ostringstream ossXYZ, ossSpeed, ossDist;
-                ossXYZ << "XYZ: " << (int)p.x << ", " << (int)p.y << ", " << (int)p.z;
-                ossSpeed << "Spd:" << fixed << setprecision(1) << codeSpeed << " | " << p.realSpeed;
-                ossDist << "Dist:" << fixed << setprecision(1) << codeDist;
+            drawCheckbox("Name Cards", optCards, 40.0f);
+            drawCheckbox("XYZ Axes", optAxes, 62.0f);
+            drawCheckbox("Planet Trails", optTrails, 84.0f);
+            drawCheckbox("System Bubble", optBubble, 106.0f);
+            drawCheckbox("Space Box", optSpaceBox, 128.0f);
 
-                // Draw crisp upright vector text inside the card
-                drawText(p.name, cardX + 10.0f, cardY - 18.0f, 0.9f, 1.0f, 1.0f, 1.0f);
-                drawText(p.realMass, cardX + 10.0f, cardY - 34.0f, 0.55f, 0.8f, 0.8f, 0.8f);
-                drawText(ossXYZ.str(), cardX + 10.0f, cardY - 48.0f, 0.55f, 0.7f, 1.0f, 0.7f);
-                drawText(ossSpeed.str(), cardX + 10.0f, cardY - 62.0f, 0.55f, 0.6f, 0.9f, 1.0f);
-                drawText(ossDist.str(), cardX + 10.0f, cardY - 76.0f, 0.55f, 0.6f, 0.9f, 1.0f);
+            // --- Render Planet Cards if enabled ---
+            if (optCards) {
+                const auto& sun = planets[0];
+                for (const auto& p : planets) {
+                    glm::vec3 worldPos(p.x, p.y, p.z);
+                    glm::vec3 screenPos = glm::project(worldPos, engine.view, engine.projection, glm::vec4(0, 0, engine.WIDTH, engine.HEIGHT));
+                    
+                    float sx = screenPos.x;
+                    float sy = screenPos.y;
+
+                    float relVx = p.vx - sun.vx;
+                    float relVy = p.vy - sun.vy;
+                    float codeSpeed = sqrt(relVx * relVx + relVy * relVy);
+                    float codeDist = sqrt((p.x - sun.x) * (p.x - sun.x) + (p.y - sun.y) * (p.y - sun.y) + (p.z - sun.z) * (p.z - sun.z));
+
+                    float cardW = 240.0f;
+                    float cardH = 95.0f;
+                    float cardX = sx + 20.0f;
+                    float cardY = sy - 20.0f;
+
+                    if (cardX + cardW > engine.WIDTH) cardX = sx - cardW - 20.0f;
+                    if (cardY - cardH < 0) cardY = sy + cardH + 20.0f;
+
+                    glColor4f(0.06f, 0.08f, 0.12f, 0.90f);
+                    glBegin(GL_QUADS);
+                    glVertex2f(cardX, cardY); glVertex2f(cardX + cardW, cardY);
+                    glVertex2f(cardX + cardW, cardY - cardH); glVertex2f(cardX, cardY - cardH);
+                    glEnd();
+
+                    glColor3f(p.cr, p.cg, p.cb);
+                    glLineWidth(1.5f);
+                    glBegin(GL_LINE_LOOP);
+                    glVertex2f(cardX, cardY); glVertex2f(cardX + cardW, cardY);
+                    glVertex2f(cardX + cardW, cardY - cardH); glVertex2f(cardX, cardY - cardH);
+                    glEnd();
+
+                    ostringstream ossXYZ, ossSpeed, ossDist;
+                    ossXYZ << "XYZ: " << (int)p.x << ", " << (int)p.y << ", " << (int)p.z;
+                    ossSpeed << "Spd:" << fixed << setprecision(1) << codeSpeed << " | " << p.realSpeed;
+                    ossDist << "Dist:" << fixed << setprecision(1) << codeDist;
+
+                    drawText(p.name, cardX + 10.0f, cardY - 18.0f, 0.9f, 1.0f, 1.0f, 1.0f);
+                    drawText(p.realMass, cardX + 10.0f, cardY - 34.0f, 0.55f, 0.8f, 0.8f, 0.8f);
+                    drawText(ossXYZ.str(), cardX + 10.0f, cardY - 48.0f, 0.55f, 0.7f, 1.0f, 0.7f);
+                    drawText(ossSpeed.str(), cardX + 10.0f, cardY - 62.0f, 0.55f, 0.6f, 0.9f, 1.0f);
+                    drawText(ossDist.str(), cardX + 10.0f, cardY - 76.0f, 0.55f, 0.6f, 0.9f, 1.0f);
+                }
             }
-            // Restore 3D matrices & depth test
+
             glMatrixMode(GL_PROJECTION);
             glPopMatrix();
             glMatrixMode(GL_MODELVIEW);
@@ -584,8 +672,6 @@ int main() {
 
             glDisable(GL_BLEND);
             glEnable(GL_DEPTH_TEST);
-        } else {
-            glfwSetWindowTitle(engine.window, "Solar System Simulator [Press TAB to toggle HUD properties]");
         }
 
         // Update window title with following status
