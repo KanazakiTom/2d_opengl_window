@@ -32,6 +32,8 @@ struct Planet {
     float prevAngle = 0.0f;
     bool angleInitialized = false;
     int completedOrbits = 0;
+    double currentOrbitStartTime = 0.0;
+    double lastOrbitDuration = 0.0;
 };
 
 struct Engine {
@@ -231,6 +233,40 @@ void drawGrid(){
     glEnd();
 }
 
+void drawRing(const Planet& p, const Planet& sun, float innerR, float outerR, float r, float g, float b) {
+    int segments = 60;
+
+    glm::vec3 toSun(sun.x - p.x, sun.y - p.y, sun.z - p.z);
+    glm::vec3 sunDir = glm::length(toSun) > 0 ? glm::normalize(toSun) : glm::vec3(1,0,0);
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_QUAD_STRIP);
+
+    for (int i = 0; i <= segments; i++) {
+        float angle = 2.0f * PI * i /segments;
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+
+        // lighting from the sun
+        glm::vec3 dir(cosA, 0.0f, sinA);
+        float facing = glm::dot(dir, sunDir);
+        float light = 0.15f + 0.85f * fmax(facing, 0.0f);
+
+        // innner ring vertex
+        glColor4f(r * light, g * light, b * light, 0.2f);
+        glVertex3f(p.x + innerR * cosA, p.y, p.z + innerR * sinA);
+        
+        // outer ring vertex
+        glColor4f(r * light, g * light, b * light, 0.6f);
+        glVertex3f(p.x + outerR * cosA, p.y, p.z + outerR * sinA);
+    }
+    glEnd();
+    glDisable(GL_BLEND);
+}
+
+
+#pragma region Additional Properities
 void drawAxes() {
     glLineWidth(2.5f);
     glBegin(GL_LINES);
@@ -269,39 +305,6 @@ void drawPlanetAxes(const Planet& p){
     glLineWidth(1.0f);
 }
 
-void drawRing(const Planet& p, const Planet& sun, float innerR, float outerR, float r, float g, float b) {
-    int segments = 60;
-
-    glm::vec3 toSun(sun.x - p.x, sun.y - p.y, sun.z - p.z);
-    glm::vec3 sunDir = glm::length(toSun) > 0 ? glm::normalize(toSun) : glm::vec3(1,0,0);
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glBegin(GL_QUAD_STRIP);
-
-    for (int i = 0; i <= segments; i++) {
-        float angle = 2.0f * PI * i /segments;
-        float cosA = cos(angle);
-        float sinA = sin(angle);
-
-        // lighting from the sun
-        glm::vec3 dir(cosA, 0.0f, sinA);
-        float facing = glm::dot(dir, sunDir);
-        float light = 0.15f + 0.85f * fmax(facing, 0.0f);
-
-        // innner ring vertex
-        glColor4f(r * light, g * light, b * light, 0.2f);
-        glVertex3f(p.x + innerR * cosA, p.y, p.z + innerR * sinA);
-        
-        // outer ring vertex
-        glColor4f(r * light, g * light, b * light, 0.6f);
-        glVertex3f(p.x + outerR * cosA, p.y, p.z + outerR * sinA);
-    }
-    glEnd();
-    glDisable(GL_BLEND);
-}
-
-#pragma region Additional Properities
 void drawBoundingBubble(float radius) {
     int stacks = 64, slices = 64;
     glColor4f(0.3f, 0.5f, 0.8f, 0.15f); // Subtle cyan grid outline
@@ -323,26 +326,28 @@ void drawBoundingBubble(float radius) {
     glDisable(GL_BLEND);
 }
 
-void drawSpaceBox(float halfSize, int gridDivisions) {
+// Render a 3D wireframe space lattice grid box with adjustable clarity/intensity
+void drawSpaceBox(float halfSize, int gridDivisions, float intensity) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.25f, 0.45f, 0.75f, 0.18f); // translucent cyan
-    glLineWidth(1.0f);
+    glColor4f(0.3f, 0.6f, 1.0f, 0.15f * intensity); // Increased brightness & opacity
+    glLineWidth(1.0f * intensity);                  // Scaled line thickness
 
     float step = (2.0f * halfSize) / gridDivisions;
 
     glBegin(GL_LINES);
-    for (int i = 0; i<= gridDivisions; i++) {
+    for (int i = 0; i <= gridDivisions; i++) {
         float u = -halfSize + i * step;
         for (int j = 0; j <= gridDivisions; j++) {
             float v = -halfSize + j * step;
 
-            glVertex3d(-halfSize, u, v); glVertex3f(halfSize, u, v);
-            glVertex3d(u, -halfSize, v); glVertex3f(u, halfSize, v);
-            glVertex3d(u, v, -halfSize); glVertex3f(u, v, halfSize);
+            glVertex3f(-halfSize, u, v); glVertex3f(halfSize, u, v);
+            glVertex3f(u, -halfSize, v); glVertex3f(u, halfSize, v);
+            glVertex3f(u, v, -halfSize); glVertex3f(u, v, halfSize);
         }
     }
     glEnd();
+    glLineWidth(1.0f);
     glDisable(GL_BLEND);
 }
 
@@ -366,6 +371,7 @@ void drawPlanetTrails(const vector<Planet>& planets) {
     glDisable(GL_BLEND);
 }
 #pragma endregion
+
 
 int main() {
     Engine engine;
@@ -408,6 +414,7 @@ int main() {
     bool optTrails = true;
     bool optBubble = true;
     bool optSpaceBox = true;
+    float spaceBoxIntensity = 2.0f; // Default brighter setting (Levels 1 to 4)
 
     while (!glfwWindowShouldClose(engine.window)) {
         // Sun control
@@ -436,15 +443,23 @@ int main() {
             int clickedIndex = -1;
 
             // Check if click is inside the top-left settings menu when TAB mode is active
-            if (showProperties && mx >= 20.0f && mx <= 250.0f && bottomMouseY >= engine.HEIGHT - 135.0f && bottomMouseY <= engine.HEIGHT - 20.0f) {
+            if (showProperties && mx >= 20.0f && mx <= 280.0f && bottomMouseY >= engine.HEIGHT - 157.0f && bottomMouseY <= engine.HEIGHT - 20.0f) {
                 float menuY = engine.HEIGHT - 20.0f;
+                float menuX = 20.0f; // Định nghĩa menuX để tránh lỗi undefined
                 if (bottomMouseY >= menuY - 50.0f && bottomMouseY <= menuY - 30.0f) optCards = !optCards;
                 else if (bottomMouseY >= menuY - 72.0f && bottomMouseY <= menuY - 52.0f) optAxes = !optAxes;
                 else if (bottomMouseY >= menuY - 94.0f && bottomMouseY <= menuY - 74.0f) optTrails = !optTrails;
                 else if (bottomMouseY >= menuY - 116.0f && bottomMouseY <= menuY - 96.0f) optBubble = !optBubble;
-                else if (bottomMouseY >= menuY - 138.0f && bottomMouseY <= menuY - 118.0f) optSpaceBox = !optSpaceBox;
+                else if (bottomMouseY >= menuY - 138.0f && bottomMouseY <= menuY - 118.0f) {
+                    if (mx > menuX + 135.0f) {
+                        spaceBoxIntensity += 1.0f; // Cycle brightness level on click
+                        if (spaceBoxIntensity > 4.0f) spaceBoxIntensity = 1.0f;
+                    } else {
+                        optSpaceBox = !optSpaceBox;
+                    }
+                }
             } else {
-                // 1. TAB MODE Card Selection
+                // 1. TAB MODE Card Selection (Đã sửa bỏ dấu { thừa)
                 if (showProperties) {
                     for (size_t i = 0; i < planets.size(); i++) {
                         glm::vec3 worldPos(planets[i].x, planets[i].y, planets[i].z);
@@ -524,11 +539,40 @@ int main() {
             p.vz += az;
         }
 
-        // 2. Move and draw planets, rings (if had)
+        // 2. Move and draw planets, rings (if had), orbit time
+        double currentTime = glfwGetTime();
+        const auto& sun = planets[0];
+
         for (auto& p : planets) {
             p.x += p.vx;
             p.y += p.vy;
             p.z += p.vz;
+
+            if (p.name != "Sun") {
+                float dx = p.x - sun.x;
+                float dz = p.z - sun.z;
+                float currentAngle = atan2(dz, dx);
+
+                if (!p.angleInitialized) {
+                    p.prevAngle = currentAngle;
+                    p.currentOrbitStartTime = currentTime;
+                    p.angleInitialized = true;
+                } else {
+                    float diff = currentAngle - p.prevAngle;
+                    if (diff >  PI) diff -= 2.0f * PI;
+                    if (diff < -PI) diff += 2.0f * PI;
+
+                    p.accumulatedAngle += abs(diff);
+                    p.prevAngle = currentAngle;
+
+                    if (p.accumulatedAngle >= 2.0f * PI) {
+                        p.completedOrbits++;
+                        p.accumulatedAngle -= 2.0f * PI;
+                        p.lastOrbitDuration = currentTime - p .currentOrbitStartTime;
+                        p.currentOrbitStartTime = currentTime;
+                    }   
+                }    
+            }
 
             if (showProperties && optTrails) {
                 p.trail.push_back(glm::vec3(p.x,p.y,p.z));
@@ -551,7 +595,7 @@ int main() {
         }
 
         if (showProperties) {
-            if (optSpaceBox) drawSpaceBox(800.0f, 8);
+            if (optSpaceBox) drawSpaceBox(800.0f, 8, spaceBoxIntensity); // Passed intensity
             if (optBubble) drawBoundingBubble(800.0f);
             if (optTrails) drawPlanetTrails(planets);
         }
@@ -574,8 +618,8 @@ int main() {
             // --- Render Top-Left Settings Checkbox Menu ---
             float menuX = 20.0f;
             float menuY = engine.HEIGHT - 20.0f;
-            float menuW = 230.0f;
-            float menuH = 150.0f;
+            float menuW = 260.0f; // Wider menu width
+            float menuH = 137.0f;
 
             glColor4f(0.06f, 0.08f, 0.12f, 0.90f);
             glBegin(GL_QUADS);
@@ -591,7 +635,7 @@ int main() {
             glEnd();
 
             drawText("DISPLAY SETTINGS:", menuX + 12.0f, menuY - 20.0f, 0.6f, 1.0f, 1.0f, 1.0f);
-
+            
             auto drawCheckbox = [&](string label, bool checked, float yOffset) {
                 float boxX = menuX + 15.0f;
                 float boxY = menuY - yOffset;
@@ -616,6 +660,11 @@ int main() {
             drawCheckbox("System Bubble", optBubble, 106.0f);
             drawCheckbox("Space Box", optSpaceBox, 128.0f);
 
+            // Render brightness level selector text next to Space Box
+            ostringstream ossInten;
+            ossInten << "[Lv." << (int)spaceBoxIntensity << "]";
+            drawText(ossInten.str(), menuX + 145.0f, menuY - 128.0f, 0.5f, 1.0f, 0.85f, 0.3f);
+
             // --- Render Planet Cards if enabled ---
             if (optCards) {
                 const auto& sun = planets[0];
@@ -628,11 +677,12 @@ int main() {
 
                     float relVx = p.vx - sun.vx;
                     float relVy = p.vy - sun.vy;
+                    float relVz = p.vz - sun.vz;
                     float codeSpeed = sqrt(relVx * relVx + relVy * relVy);
                     float codeDist = sqrt((p.x - sun.x) * (p.x - sun.x) + (p.y - sun.y) * (p.y - sun.y) + (p.z - sun.z) * (p.z - sun.z));
 
                     float cardW = 240.0f;
-                    float cardH = 95.0f;
+                    float cardH = 125.0f;
                     float cardX = sx + 20.0f;
                     float cardY = sy - 20.0f;
 
@@ -652,16 +702,38 @@ int main() {
                     glVertex2f(cardX + cardW, cardY - cardH); glVertex2f(cardX, cardY - cardH);
                     glEnd();
 
-                    ostringstream ossXYZ, ossSpeed, ossDist;
+                    // cal orbit time
+                    float fractionDone = p.accumulatedAngle / (2.0f * PI);
+                    double elapsedTime = currentTime - p.currentOrbitStartTime;
+                    double estRealTotalTime = (fractionDone > 0.01f) ? (elapsedTime / fractionDone) : 0.0;
+                    double estRealRemTime = estRealTotalTime - elapsedTime;
+
+                    // code time: T = 2*PI*r / v
+                    float estCodePeriod = (codeSpeed > 0.001f) ? (2.0f * PI * codeDist / codeSpeed) : 0.0f;
+                    float estCodeRemTime = estCodePeriod * (1.0f - fractionDone);
+
+                    ostringstream ossXYZ, ossSpeed, ossDist, ossOrbits, ossCodeTime, ossRealTime;
                     ossXYZ << "XYZ: " << (int)p.x << ", " << (int)p.y << ", " << (int)p.z;
-                    ossSpeed << "Spd:" << fixed << setprecision(1) << codeSpeed << " | " << p.realSpeed;
-                    ossDist << "Dist:" << fixed << setprecision(1) << codeDist;
+                    ossSpeed << "Speed:" << fixed << setprecision(1) << codeSpeed << " | " << p.realSpeed;
+                    ossDist << "Distance To Sun:" << fixed << setprecision(1) << codeDist;
+                    ossOrbits << "Orbits Completed: " << p.completedOrbits;
+
+                    if (p.name == "Sun") {
+                        ossCodeTime << "Estimated Period: N/A";
+                        ossRealTime << "Real Rem: N/A";
+                    } else {
+                        ossCodeTime << "Est Code T: " << fixed << setprecision(1) << estCodeRemTime << "s rem";
+                        ossRealTime << "Est Real T: " << fixed << setprecision(1) << estRealRemTime << "s rem";
+                    }
 
                     drawText(p.name, cardX + 10.0f, cardY - 18.0f, 0.9f, 1.0f, 1.0f, 1.0f);
                     drawText(p.realMass, cardX + 10.0f, cardY - 34.0f, 0.55f, 0.8f, 0.8f, 0.8f);
                     drawText(ossXYZ.str(), cardX + 10.0f, cardY - 48.0f, 0.55f, 0.7f, 1.0f, 0.7f);
                     drawText(ossSpeed.str(), cardX + 10.0f, cardY - 62.0f, 0.55f, 0.6f, 0.9f, 1.0f);
                     drawText(ossDist.str(), cardX + 10.0f, cardY - 76.0f, 0.55f, 0.6f, 0.9f, 1.0f);
+                    drawText(ossOrbits.str(), cardX + 10.0f, cardY - 90.0f, 0.55f, 1.0f, 0.85f, 0.3f);
+                    drawText(ossCodeTime.str(), cardX + 10.0f, cardY - 104.0f, 0.55f, 0.4f, 1.0f, 0.9f);
+                    drawText(ossRealTime.str(), cardX + 10.0f, cardY - 118.0f, 0.55f, 1.0f, 0.5f, 0.8f);
                 }
             }
 
