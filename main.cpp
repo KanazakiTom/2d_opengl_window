@@ -102,6 +102,7 @@ struct Engine {
     }
 };
 
+#pragma region Objects
 void drawCircle(float cx, float cy, float r) {
     glBegin(GL_TRIANGLE_FAN);
     glVertex2f(cx, cy);
@@ -150,6 +151,52 @@ void drawSphere(const Planet& p, const Planet& sun) {
     }
 }
 
+void drawBlackHole(const Planet& bh) {
+    int segments = 80;
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+
+    // accretion disk
+    float rInner = bh.r * 1.15f;
+    float rOuter = bh.r * 5.0f;
+
+    glBegin(GL_QUAD_STRIP);
+    for (int i = 0; i<=segments; i++) {
+        float angle = 2.0f * PI * i / segments;
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+
+        // inner photon ring (white-orange);
+        glColor4f(1.0f, 0.85f, 0.6f, 0.95f);
+        glVertex3f(bh.x + rInner * cosA, bh.y, bh.z + rOuter * sinA);
+    }
+    glEnd();
+
+    // light bending
+    glBegin(GL_QUAD_STRIP);
+    for (int i = 0; i<= segments; i++) {
+        float angle = 2.0f * PI * i / segments;
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+
+        float arcRadius1 = bh.r * 1.25f;
+        float arcRadius2 = bh.r * 1.8f;
+        
+        glColor4f(1.0f, 0.95f, 0.8f, 0.85f);
+        glVertex3f(bh.x + arcRadius1 * cosA, bh.y + bh.r * 0.9f, bh.z + arcRadius1 * sinA);
+        glColor4f(1.0f, 0.45f, 0.1f, 0.0f);
+        glVertex3f(bh.x + arcRadius2 * cosA, bh.y + bh.r * 2.2f, bh.z + arcRadius2 * sinA);
+    }
+
+    glEnd();
+    glDisable(GL_BLEND);
+
+    // central event horizon core
+    Planet blackCore = bh;
+    blackCore.cr = 0.0f; blackCore.cg = 0.0f; blackCore.cb = 0.0f;
+    drawSphere(blackCore, bh);
+}
 // Properly scaled vector character drawer for 1600x900 world coordinates
 void drawVectorChar(char c, float x, float y, float size) {
     glPushMatrix();
@@ -264,7 +311,7 @@ void drawRing(const Planet& p, const Planet& sun, float innerR, float outerR, fl
     glEnd();
     glDisable(GL_BLEND);
 }
-
+#pragma endregion Objects
 
 #pragma region Additional Properities
 void drawAxes() {
@@ -305,7 +352,7 @@ void drawPlanetAxes(const Planet& p){
     glLineWidth(1.0f);
 }
 
-void drawBoundingBubble(float radius) {
+void drawBoundingBubble(float radius, glm::vec3 center) {
     int stacks = 64, slices = 64;
     glColor4f(0.3f, 0.5f, 0.8f, 0.15f); // Subtle cyan grid outline
     glEnable(GL_BLEND);
@@ -316,9 +363,9 @@ void drawBoundingBubble(float radius) {
         glBegin(GL_LINE_LOOP);
         for (int j = 0; j < slices; j++) {
             float phi = 2.0f * PI * j / slices;
-            float x = radius * sin(theta) * cos(phi);
-            float y = radius * cos(theta);
-            float z = radius * sin(theta) * sin(phi);
+            float x = center.x + radius * sin(theta) * cos(phi);
+            float y = center.y + radius * cos(theta);
+            float z = center.z + radius * sin(theta) * sin(phi);
             glVertex3f(x, y, z);
         }
         glEnd();
@@ -329,54 +376,72 @@ void drawBoundingBubble(float radius) {
 // Calculate relativistic spatial vertex displacement based on General Relativity weak-field approximation
 glm::vec3 warpSpaceVertex(glm::vec3 v, const vector<Planet>& planets) {
     glm::vec3 displacement(0.0f, 0.0f, 0.0f);
-    float warpingStrength = 12000.0f; // Tune this to increase/decrease overall warping intensity
+    float warpingStrength = 45000.0f; // Tune this to increase/decrease overall warping intensity
 
     for (const auto& p : planets) {
         glm::vec3 pPos(p.x, p.y, p.z);
         glm::vec3 rVec = v - pPos;
         float distSq = glm::dot(rVec, rVec);
-        float softening = 4000.0f; // Prevents division spikes near the core
+        float softening = 3000.0f; // Prevents division spikes near the core
 
         // Inverse-square/cubed gravitational well deformation formula
-        float factor = (warpingStrength * p.m) / pow(distSq + softening, 1.5f);
+        float massWeight = (p.name == "Sun") ? 1.0f : (p.m / 100.0f);
+        float factor = (warpingStrength * massWeight) / pow(distSq + softening, 1.3f);
         displacement -= rVec * factor;
     }
 
     return v + displacement;
 }
 
-// Render a 3D wireframe space lattice grid box warped by gravitational fields
-void drawSpaceBox(float halfSize, int gridDivisions, float intensity, const vector<Planet>& planets) {
+// Render a 3D wireframe space lattice grid box with smooth gravitational warping
+void drawSpaceBox(glm::vec3 center, float halfSize, int gridDivisions, float intensity, const vector<Planet>& planets) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.3f, 0.6f, 1.0f, 0.15f * intensity);
-    glLineWidth(1.0f * intensity);
+    glColor4f(0.35f, 0.65f, 1.0f, 0.3f * intensity);
+    glLineWidth(1.3f * intensity);
 
     float step = (2.0f * halfSize) / gridDivisions;
+    int lineSubdivs = 14; // Subdivide each span so lines curve smoothly instead of staying straight
 
-    glBegin(GL_LINES);
     for (int i = 0; i <= gridDivisions; i++) {
         float u = -halfSize + i * step;
         for (int j = 0; j <= gridDivisions; j++) {
             float vCoord = -halfSize + j * step;
 
-            // X-aligned lines
-            glm::vec3 p1 = warpSpaceVertex(glm::vec3(-halfSize, u, vCoord), planets);
-            glm::vec3 p2 = warpSpaceVertex(glm::vec3(halfSize, u, vCoord), planets);
-            glVertex3f(p1.x, p1.y, p1.z); glVertex3f(p2.x, p2.y, p2.z);
+            // 1. X-aligned warped line strips
+            glBegin(GL_LINE_STRIP);
+            for (int s = 0; s <= lineSubdivs; s++) {
+                float t = (float)s / lineSubdivs;
+                float x = -halfSize + t * (2.0f * halfSize);
+                glm::vec3 pt = center + glm::vec3(x, u, vCoord);
+                glm::vec3 warped = warpSpaceVertex(pt, planets);
+                glVertex3f(warped.x, warped.y, warped.z);
+            }
+            glEnd();
 
-            // Y-aligned lines
-            glm::vec3 p3 = warpSpaceVertex(glm::vec3(u, -halfSize, vCoord), planets);
-            glm::vec3 p4 = warpSpaceVertex(glm::vec3(u, halfSize, vCoord), planets);
-            glVertex3f(p3.x, p3.y, p3.z); glVertex3f(p4.x, p4.y, p4.z);
+            // 2. Y-aligned warped line strips
+            glBegin(GL_LINE_STRIP);
+            for (int s = 0; s <= lineSubdivs; s++) {
+                float t = (float)s / lineSubdivs;
+                float y = -halfSize + t * (2.0f * halfSize);
+                glm::vec3 pt = center + glm::vec3(u, y, vCoord);
+                glm::vec3 warped = warpSpaceVertex(pt, planets);
+                glVertex3f(warped.x, warped.y, warped.z);
+            }
+            glEnd();
 
-            // Z-aligned lines
-            glm::vec3 p5 = warpSpaceVertex(glm::vec3(u, vCoord, -halfSize), planets);
-            glm::vec3 p6 = warpSpaceVertex(glm::vec3(u, vCoord, halfSize), planets);
-            glVertex3f(p5.x, p5.y, p5.z); glVertex3f(p6.x, p6.y, p6.z);
+            // 3. Z-aligned warped line strips
+            glBegin(GL_LINE_STRIP);
+            for (int s = 0; s <= lineSubdivs; s++) {
+                float t = (float)s / lineSubdivs;
+                float z = -halfSize + t * (2.0f * halfSize);
+                glm::vec3 pt = center + glm::vec3(u, vCoord, z);
+                glm::vec3 warped = warpSpaceVertex(pt, planets);
+                glVertex3f(warped.x, warped.y, warped.z);
+            }
+            glEnd();
         }
     }
-    glEnd();
     glLineWidth(1.0f);
     glDisable(GL_BLEND);
 }
@@ -421,17 +486,18 @@ int main() {
     // };
     
     std::vector<Planet> planets = {
-        //  Name        x     y     z     vx     vy     vz    r     m         realMass                     realSpeed      realDist          cr    cg    cb
-        { "Sun",       0,     0,    0,   0.0,   0.0,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
-        { "Mercury", 100,     0,   12,   0.0,   4.08, -0.3,   6,      0.14f, "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
-        { "Venus",   150,     0,   10,   0.0,   3.33,  0.2,  10,      0.81f, "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
-        { "Earth",   210,     0,    0,   0.0,   2.82,  0.0,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
-        { "Moon",    216.5,   0,    0,   0.0,   3.15,  0.1,   3,      0.012f,"Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
-        { "Mars",    290,     0,  -15,   0.0,   2.40,  0.15,  9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
-        { "Jupiter", 420,     0,   20,   0.0,   1.99, -0.1,  22,    317.8f, "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
-        { "Saturn",  540,     0,  -25,   0.0,   1.76,  0.12, 17,     95.2f, "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
-        { "Uranus",  650,     0,   15,   0.0,   1.60, -0.08, 14,     14.5f, "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
-        { "Neptune", 740,     0,  -20,   0.0,   1.50,  0.1,  14,     17.1f, "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+        //  Name               x        y     z     vx     vy       vz    r     m         realMass                     realSpeed      realDist          cr    cg    cb
+        { "Sun",              0.0f,     0,    0,   0.0,   11.55,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
+        { "Mercury",        100.0f,     0,   12,   0.0,   15.63,  -0.3,   6,      0.14f, "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
+        { "Venus",          150.0f,     0,   10,   0.0,   14.88,   0.2,  10,      0.81f, "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
+        { "Earth",          210.0f,     0,    0,   0.0,   14.37,   0.0,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
+        { "Moon",           216.5f,     0,    0,   0.0,   14.70,   0.1,   3,      0.012f,"Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
+        { "Mars",           290.0f,     0,  -15,   0.0,   13.95,   0.15,  9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
+        { "Jupiter",        420.0f,     0,   20,   0.0,   13.54,  -0.1,  22,    317.8f, "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
+        { "Saturn",         540.0f,     0,  -25,   0.0,   13.31,   0.12, 17,     95.2f, "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
+        { "Uranus",         650.0f,     0,   15,   0.0,   13.15,  -0.08, 14,     14.5f, "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
+        { "Neptune",        740.0f,     0,  -20,   0.0,   13.05,   0.1,  14,     17.1f, "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+        { "Supermassive BH", -2500.0f,  0,    0,   0.0,    0.0,    0.0,  55,  500000.0f, "Mass: 200M Earth",   "Vel: 1000 km/s",  "Dist: Galactic",   0.08, 0.08, 0.12 }
     };
 
     bool showProperties = false;
@@ -578,7 +644,7 @@ int main() {
             p.y += p.vy;
             p.z += p.vz;
 
-            if (p.name != "Sun") {
+            if (p.name != "Sun" && p.name != "Supermassive Black Hole") {
                 float dx = p.x - sun.x;
                 float dz = p.z - sun.z;
                 float currentAngle = atan2(dz, dx);
@@ -612,11 +678,14 @@ int main() {
 
             }
             
-            drawSphere(p, planets[0]);
-
-            // render Jupiter's ring
-            if (p.name == "Jupiter") {
-                drawRing(p, planets[0], p.r * 1.3f, p.r * 2.1f, 0.8f, 0.7f, 0.6f);
+            // Draw Black Hole with Accretion Disk or normal sphere for planets
+            if (p.name == "Supermassive BH") {
+                drawBlackHole(p);
+            } else {
+                drawSphere(p, planets[0]);
+                if (p.name == "Jupiter") {
+                    drawRing(p, planets[0], p.r * 1.3f, p.r * 2.1f, 0.8f, 0.7f, 0.6f);
+                }
             }
 
             if (showProperties && optAxes) {
@@ -624,9 +693,11 @@ int main() {
             }
         }
 
+        // Render Space Box and System Bubble centered on the Black Hole (planets[10])
         if (showProperties) {
-            if (optSpaceBox) drawSpaceBox(800.0f, 8, spaceBoxIntensity, planets); // Passed planets vector for gravity warping
-            if (optBubble) drawBoundingBubble(800.0f);
+            glm::vec3 bhCenter(planets[10].x, planets[10].y, planets[10].z);
+            if (optSpaceBox) drawSpaceBox(bhCenter, 3500.0f, 10, spaceBoxIntensity, planets);
+            if (optBubble) drawBoundingBubble(3500.0f, bhCenter);
             if (optTrails) drawPlanetTrails(planets);
         }
 
