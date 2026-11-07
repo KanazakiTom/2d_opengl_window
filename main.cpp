@@ -326,12 +326,31 @@ void drawBoundingBubble(float radius) {
     glDisable(GL_BLEND);
 }
 
-// Render a 3D wireframe space lattice grid box with adjustable clarity/intensity
-void drawSpaceBox(float halfSize, int gridDivisions, float intensity) {
+// Calculate relativistic spatial vertex displacement based on General Relativity weak-field approximation
+glm::vec3 warpSpaceVertex(glm::vec3 v, const vector<Planet>& planets) {
+    glm::vec3 displacement(0.0f, 0.0f, 0.0f);
+    float warpingStrength = 12000.0f; // Tune this to increase/decrease overall warping intensity
+
+    for (const auto& p : planets) {
+        glm::vec3 pPos(p.x, p.y, p.z);
+        glm::vec3 rVec = v - pPos;
+        float distSq = glm::dot(rVec, rVec);
+        float softening = 4000.0f; // Prevents division spikes near the core
+
+        // Inverse-square/cubed gravitational well deformation formula
+        float factor = (warpingStrength * p.m) / pow(distSq + softening, 1.5f);
+        displacement -= rVec * factor;
+    }
+
+    return v + displacement;
+}
+
+// Render a 3D wireframe space lattice grid box warped by gravitational fields
+void drawSpaceBox(float halfSize, int gridDivisions, float intensity, const vector<Planet>& planets) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glColor4f(0.3f, 0.6f, 1.0f, 0.15f * intensity); // Increased brightness & opacity
-    glLineWidth(1.0f * intensity);                  // Scaled line thickness
+    glColor4f(0.3f, 0.6f, 1.0f, 0.15f * intensity);
+    glLineWidth(1.0f * intensity);
 
     float step = (2.0f * halfSize) / gridDivisions;
 
@@ -339,11 +358,22 @@ void drawSpaceBox(float halfSize, int gridDivisions, float intensity) {
     for (int i = 0; i <= gridDivisions; i++) {
         float u = -halfSize + i * step;
         for (int j = 0; j <= gridDivisions; j++) {
-            float v = -halfSize + j * step;
+            float vCoord = -halfSize + j * step;
 
-            glVertex3f(-halfSize, u, v); glVertex3f(halfSize, u, v);
-            glVertex3f(u, -halfSize, v); glVertex3f(u, halfSize, v);
-            glVertex3f(u, v, -halfSize); glVertex3f(u, v, halfSize);
+            // X-aligned lines
+            glm::vec3 p1 = warpSpaceVertex(glm::vec3(-halfSize, u, vCoord), planets);
+            glm::vec3 p2 = warpSpaceVertex(glm::vec3(halfSize, u, vCoord), planets);
+            glVertex3f(p1.x, p1.y, p1.z); glVertex3f(p2.x, p2.y, p2.z);
+
+            // Y-aligned lines
+            glm::vec3 p3 = warpSpaceVertex(glm::vec3(u, -halfSize, vCoord), planets);
+            glm::vec3 p4 = warpSpaceVertex(glm::vec3(u, halfSize, vCoord), planets);
+            glVertex3f(p3.x, p3.y, p3.z); glVertex3f(p4.x, p4.y, p4.z);
+
+            // Z-aligned lines
+            glm::vec3 p5 = warpSpaceVertex(glm::vec3(u, vCoord, -halfSize), planets);
+            glm::vec3 p6 = warpSpaceVertex(glm::vec3(u, vCoord, halfSize), planets);
+            glVertex3f(p5.x, p5.y, p5.z); glVertex3f(p6.x, p6.y, p6.z);
         }
     }
     glEnd();
@@ -595,7 +625,7 @@ int main() {
         }
 
         if (showProperties) {
-            if (optSpaceBox) drawSpaceBox(800.0f, 8, spaceBoxIntensity); // Passed intensity
+            if (optSpaceBox) drawSpaceBox(800.0f, 8, spaceBoxIntensity, planets); // Passed planets vector for gravity warping
             if (optBubble) drawBoundingBubble(800.0f);
             if (optTrails) drawPlanetTrails(planets);
         }
