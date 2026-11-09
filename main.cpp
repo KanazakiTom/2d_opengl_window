@@ -152,51 +152,75 @@ void drawSphere(const Planet& p, const Planet& sun) {
 }
 
 void drawBlackHole(const Planet& bh) {
-    int segments = 80;
-
+    int segments = 100;
+    
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE); // Additive blending for glowing plasma effect
 
-    // accretion disk
-    float rInner = bh.r * 1.15f;
-    float rOuter = bh.r * 5.0f;
+    float rInner = bh.r * 1.2f;
+    float rOuter = bh.r * 5.5f;
 
+    // 1. Primary Accretion Disk (Horizontal flat glowing plasma disk)
     glBegin(GL_QUAD_STRIP);
-    for (int i = 0; i<=segments; i++) {
+    for (int i = 0; i <= segments; i++) {
         float angle = 2.0f * PI * i / segments;
         float cosA = cos(angle);
         float sinA = sin(angle);
 
-        // inner photon ring (white-orange);
-        glColor4f(1.0f, 0.85f, 0.6f, 0.95f);
-        glVertex3f(bh.x + rInner * cosA, bh.y, bh.z + rOuter * sinA);
+        // Inner bright photon ring (Intense white-orange)
+        glColor4f(1.0f, 0.9f, 0.7f, 1.0f);
+        glVertex3f(bh.x + rInner * cosA, bh.y, bh.z + rInner * sinA);
+
+        // Outer fiery disk edge fading out
+        glColor4f(0.8f, 0.3f, 0.05f, 0.0f);
+        glVertex3f(bh.x + rOuter * cosA, bh.y, bh.z + rOuter * sinA);
     }
     glEnd();
 
-    // light bending
+    // 2. Gravitational Lensing Upper Arc (Light bent over the top of the event horizon)
     glBegin(GL_QUAD_STRIP);
-    for (int i = 0; i<= segments; i++) {
+    for (int i = 0; i <= segments; i++) {
         float angle = 2.0f * PI * i / segments;
         float cosA = cos(angle);
         float sinA = sin(angle);
 
-        float arcRadius1 = bh.r * 1.25f;
-        float arcRadius2 = bh.r * 1.8f;
+        float arcInner = bh.r * 1.3f;
+        float arcOuter = bh.r * 2.2f;
+
+        glColor4f(1.0f, 0.85f, 0.6f, 0.85f);
+        glVertex3f(bh.x + arcInner * cosA, bh.y + bh.r * 0.4f, bh.z + arcInner * sinA);
         
-        glColor4f(1.0f, 0.95f, 0.8f, 0.85f);
-        glVertex3f(bh.x + arcRadius1 * cosA, bh.y + bh.r * 0.9f, bh.z + arcRadius1 * sinA);
-        glColor4f(1.0f, 0.45f, 0.1f, 0.0f);
-        glVertex3f(bh.x + arcRadius2 * cosA, bh.y + bh.r * 2.2f, bh.z + arcRadius2 * sinA);
+        glColor4f(0.9f, 0.35f, 0.05f, 0.0f);
+        glVertex3f(bh.x + arcOuter * cosA, bh.y + bh.r * 2.4f, bh.z + arcOuter * sinA);
     }
-
     glEnd();
+
+    // 3. Gravitational Lensing Lower Arc (Light bent under the event horizon)
+    glBegin(GL_QUAD_STRIP);
+    for (int i = 0; i <= segments; i++) {
+        float angle = 2.0f * PI * i / segments;
+        float cosA = cos(angle);
+        float sinA = sin(angle);
+
+        float arcInner = bh.r * 1.3f;
+        float arcOuter = bh.r * 2.2f;
+
+        glColor4f(1.0f, 0.85f, 0.6f, 0.85f);
+        glVertex3f(bh.x + arcInner * cosA, bh.y - bh.r * 0.4f, bh.z + arcInner * sinA);
+        
+        glColor4f(0.9f, 0.35f, 0.05f, 0.0f);
+        glVertex3f(bh.x + arcOuter * cosA, bh.y - bh.r * 2.4f, bh.z + arcOuter * sinA);
+    }
+    glEnd();
+
     glDisable(GL_BLEND);
 
-    // central event horizon core
+    // 4. Central Event Horizon Core (Pitch black sphere)
     Planet blackCore = bh;
     blackCore.cr = 0.0f; blackCore.cg = 0.0f; blackCore.cb = 0.0f;
     drawSphere(blackCore, bh);
 }
+
 // Properly scaled vector character drawer for 1600x900 world coordinates
 void drawVectorChar(char c, float x, float y, float size) {
     glPushMatrix();
@@ -487,23 +511,23 @@ int main() {
     
     std::vector<Planet> planets = {
         //  Name               x        y     z     vx     vy       vz    r     m         realMass                     realSpeed      realDist          cr    cg    cb
-        { "Sun",              0.0f,     0,    0,   0.0,   11.55,   0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
-        { "Mercury",        100.0f,     0,   12,   0.0,   15.63,  -0.3,   6,      0.14f, "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
-        { "Venus",          150.0f,     0,   10,   0.0,   14.88,   0.2,  10,      0.81f, "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
-        { "Earth",          210.0f,     0,    0,   0.0,   14.37,   0.0,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
-        { "Moon",           216.5f,     0,    0,   0.0,   14.70,   0.1,   3,      0.012f,"Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
-        { "Mars",           290.0f,     0,  -15,   0.0,   13.95,   0.15,  9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
-        { "Jupiter",        420.0f,     0,   20,   0.0,   13.54,  -0.1,  22,    317.8f, "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
-        { "Saturn",         540.0f,     0,  -25,   0.0,   13.31,   0.12, 17,     95.2f, "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
-        { "Uranus",         650.0f,     0,   15,   0.0,   13.15,  -0.08, 14,     14.5f, "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
-        { "Neptune",        740.0f,     0,  -20,   0.0,   13.05,   0.1,  14,     17.1f, "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
-        { "Supermassive BH", -2500.0f,  0,    0,   0.0,    0.0,    0.0,  55,  500000.0f, "Mass: 200M Earth",   "Vel: 1000 km/s",  "Dist: Galactic",   0.08, 0.08, 0.12 }
+        { "Sun",              0.0f,     0,    0,   0.0,    8.17,    0.0,  45,   2500.0f,  "Mass: 333k Earth",   "Vel: 220 km/s",   "Dist: Center",     1.00, 0.78, 0.25 },
+        { "Mercury",        100.0f,     0,   12,   0.0,   12.25,  -0.3,   6,      0.14f, "Mass: 0.055 Earth",  "Vel: 47.4 km/s",  "Dist: 58M km",     0.69, 0.69, 0.69 },
+        { "Venus",          150.0f,     0,   10,   0.0,   11.50,   0.2,  10,      0.81f, "Mass: 0.815 Earth",  "Vel: 35.0 km/s",  "Dist: 108M km",    0.93, 0.79, 0.51 },
+        { "Earth",          210.0f,     0,    0,   0.0,   10.99,   0.0,  12,      1.0f,  "Mass: 1.0 Earth",    "Vel: 29.8 km/s",  "Dist: 150M km",    0.35, 0.62, 1.00 },
+        { "Moon",           216.5f,     0,    0,   0.0,   11.32,   0.1,   3,      0.012f,"Mass: 0.012 Earth",  "Vel: 1.0 km/s",   "Dist: 384k km",    0.70, 0.70, 0.70 },
+        { "Mars",           290.0f,     0,  -15,   0.0,   10.57,   0.15,  9,      0.11f, "Mass: 0.107 Earth",  "Vel: 24.1 km/s",  "Dist: 228M km",    0.90, 0.38, 0.24 },
+        { "Jupiter",        420.0f,     0,   20,   0.0,   10.16,  -0.1,  22,    317.8f, "Mass: 317.8 Earth",  "Vel: 13.1 km/s",  "Dist: 778M km",    0.85, 0.65, 0.45 },
+        { "Saturn",         540.0f,     0,  -25,   0.0,    9.93,   0.12, 17,     95.2f, "Mass: 95.2 Earth",   "Vel: 9.7 km/s",   "Dist: 1.4B km",    0.91, 0.82, 0.56 },
+        { "Uranus",         650.0f,     0,   15,   0.0,    9.77,  -0.08, 14,     14.5f, "Mass: 14.5 Earth",   "Vel: 6.8 km/s",   "Dist: 2.8B km",    0.39, 0.75, 0.87 },
+        { "Neptune",        740.0f,     0,  -20,   0.0,    9.67,   0.1,  14,     17.1f, "Mass: 17.1 Earth",   "Vel: 5.4 km/s",   "Dist: 4.5B km",    0.25, 0.41, 0.88 },
+        { "Supermassive BH", -5000.0f,  0,    0,   0.0,    0.0,    0.0,  80,  500000.0f, "Mass: 200M Earth",   "Vel: 1000 km/s",  "Dist: Galactic",   0.08, 0.08, 0.12 }
     };
 
     bool showProperties = false;
     bool tabWasPressed = false;
     bool mouseWasPressed = false;
-    int followedPlanet = -1;
+    int followedPlanet = 1;
 
     bool optCards = true;
     bool optAxes = true;
